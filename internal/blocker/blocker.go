@@ -15,6 +15,10 @@ func Block(hosts *reader.Hosts, domain string) error {
 
 	hosts.Entries[domain] = "0.0.0.0"
 
+	if err := save(hosts); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -25,15 +29,19 @@ func Unblock(hosts *reader.Hosts, domain string) error {
 
 	delete(hosts.Entries, domain)
 
+	if err := save(hosts); err != nil {
+		return err
+	}
+
 	return nil
 }
 
-func Save(hosts *reader.Hosts) error {
-	f, err := os.Create("hosts")
+func save(hosts *reader.Hosts) error {
+	tmpFile, err := os.CreateTemp("", "hostctl-*")
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer tmpFile.Close()
 
 	hostsFile, err := os.Open("/etc/hosts")
 	if err != nil {
@@ -42,18 +50,34 @@ func Save(hosts *reader.Hosts) error {
 	defer hostsFile.Close()
 	scanner := bufio.NewScanner(hostsFile)
 
+	inBlockedSection := false
+
 	for scanner.Scan() {
-		f.Write([]byte(scanner.Text()))
-		f.Write([]byte("\n"))
+		line := scanner.Text()
+		if line == "# blocked websites" {
+			inBlockedSection = true
+		}
+		if !inBlockedSection {
+			tmpFile.Write([]byte(line))
+			tmpFile.Write([]byte("\n"))
+		}
 	}
 
-	f.Write([]byte("# blocked websites\n"))
+	if err := scanner.Err(); err != nil {
+		return err
+	}
+
+	tmpFile.Write([]byte("# blocked websites\n"))
 
 	for k, v := range hosts.Entries {
-		f.Write([]byte(v))
-		f.Write([]byte("\t"))
-		f.Write([]byte(k))
-		f.Write([]byte("\n"))
+		tmpFile.Write([]byte(v))
+		tmpFile.Write([]byte("\t"))
+		tmpFile.Write([]byte(k))
+		tmpFile.Write([]byte("\n"))
+	}
+
+	if err := os.Rename(tmpFile.Name(), "/etc/hosts"); err != nil {
+		return err
 	}
 
 	return nil
