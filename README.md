@@ -1,6 +1,8 @@
 # hostctl
 A CLI tool for blocking websites by managing /etc/hosts on **macOS**.
 
+![demo](assets/demo.gif)
+
 ## Requirements
 - macOS
 - Go 1.21+
